@@ -16,7 +16,12 @@ def get_mongo_client() -> MongoClient:
     if _client is None:
         if not settings.mongodb_uri:
             raise ValueError("MONGODB_URI not set in .env or environment")
-        _client = MongoClient(settings.mongodb_uri, tlsCAFile=certifi.where())
+        uri = settings.mongodb_uri.lower()
+        uses_tls = uri.startswith("mongodb+srv://") or "tls=true" in uri or "ssl=true" in uri
+        if uses_tls:
+            _client = MongoClient(settings.mongodb_uri, tlsCAFile=certifi.where())
+        else:
+            _client = MongoClient(settings.mongodb_uri)
         logger.info("MongoDB client initialized")
     return _client
 
@@ -43,3 +48,4 @@ RUN_STATUS_COLLECTION = "run_status"
 COLLECTIONS_COLLECTION = "collections"
 QUERIES_COLLECTION = "queries"
 RESULTS_COLLECTION = "results"
+SESSION_CHUNKS_COLLECTION = "session_chunks"

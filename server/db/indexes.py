@@ -12,6 +12,7 @@ from server.db.atlas import (
     QUERIES_COLLECTION,
     RESULTS_COLLECTION,
     RUN_STATUS_COLLECTION,
+    SESSION_CHUNKS_COLLECTION,
     get_collection,
 )
 from server.utils.logger import get_logger
@@ -36,6 +37,11 @@ STANDARD_INDEX_SPEC: dict[str, list[IndexModel]] = {
     ],
     CHUNKS_COLLECTION: [
         IndexModel([("experiment_id", ASCENDING)]),
+    ],
+    SESSION_CHUNKS_COLLECTION: [
+        IndexModel([("session_id", ASCENDING)]),
+        IndexModel([("source", ASCENDING)]),
+        IndexModel([("created_at", ASCENDING)]),
     ],
     COLLECTIONS_COLLECTION: [
         IndexModel([("hash", ASCENDING)]),
@@ -67,6 +73,8 @@ def _build_vector_index_model(name: str, dimensions: int) -> SearchIndexModel:
                 },
                 {"type": "filter", "path": "experiment_id"},
                 {"type": "filter", "path": "embedding_model"},
+                {"type": "filter", "path": "session_id"},
+                {"type": "filter", "path": "source"},
             ]
         },
         name=name,
@@ -82,26 +90,20 @@ def _get_existing_search_indexes(collection) -> set[str]:
         return set()
 
 
-def create_vector_indexes() -> bool:
-    """Create Atlas vector search indexes programmatically.
-
-    Returns True if all indexes are confirmed active, False if creation
-    was skipped (e.g. free-tier cluster) or indexes are still building.
-    """
-    chunks = get_collection(CHUNKS_COLLECTION)
-    existing = _get_existing_search_indexes(chunks)
+def _create_vector_indexes_on_collection(collection: Collection) -> tuple[bool, list[str]]:
+    """Create vector search indexes on a single collection. Returns (success, created_names)."""
+    existing = _get_existing_search_indexes(collection)
 
     needed = [cfg for cfg in VECTOR_INDEX_CONFIGS if cfg["name"] not in existing]
     if not needed:
-        logger.info("All vector search indexes already exist")
-        return True
+        return True, []
 
     models = [_build_vector_index_model(cfg["name"], cfg["dimensions"]) for cfg in needed]
     names = [cfg["name"] for cfg in needed]
 
     try:
-        chunks.create_search_indexes(models=models)
-        logger.info(f"Created vector search indexes: {names}")
+        collection.create_search_indexes(models=models)
+        logger.info(f"Created vector search indexes on {collection.name}: {names}")
     except Exception as e:
         err_str = str(e)
         if "CommandNotFound" in err_str or "no such command" in err_str.lower():
@@ -110,10 +112,37 @@ def create_vector_indexes() -> bool:
                 "Create indexes manually in the Atlas UI:"
             )
             _log_manual_instructions()
-            return False
+            return False, names
         raise
 
-    return _wait_for_indexes_ready(chunks, names)
+    return True, names
+
+
+def create_vector_indexes() -> bool:
+    """Create Atlas vector search indexes programmatically on all collections that need them.
+
+    Returns True if all indexes are confirmed active, False if creation
+    was skipped (e.g. free-tier cluster) or indexes are still building.
+    """
+    collections = [CHUNKS_COLLECTION, SESSION_CHUNKS_COLLECTION]
+    all_names: list[str] = []
+    all_ready = True
+
+    for coll_name in collections:
+        collection = get_collection(coll_name)
+        success, names = _create_vector_indexes_on_collection(collection)
+        if not success:
+            return False
+        if names:
+            all_names.extend(names)
+            ready = _wait_for_indexes_ready(collection, names)
+            if not ready:
+                all_ready = False
+
+    if not all_names:
+        logger.info("All vector search indexes already exist")
+
+    return all_ready
 
 
 def _wait_for_indexes_ready(collection, names: list[str], timeout_s: int = 120) -> bool:
@@ -154,7 +183,8 @@ def _wait_for_indexes_ready(collection, names: list[str], timeout_s: int = 120) 
 def _log_manual_instructions() -> None:
     for cfg in VECTOR_INDEX_CONFIGS:
         logger.info(f"  Index '{cfg['name']}': numDimensions={cfg['dimensions']} ({cfg['desc']})")
-    logger.info("  path=embedding, similarity=cosine, filters=[experiment_id, embedding_model]")
+    filters = "[experiment_id, embedding_model, session_id, source]"
+    logger.info(f"  path=embedding, similarity=cosine, filters={filters}")
     logger.info("  See: https://www.mongodb.com/docs/atlas/atlas-vector-search/create-index/")
 
 

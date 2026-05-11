@@ -166,3 +166,37 @@ export interface ExploreResponse {
   ranked_configs: RankedConfig[];
   detailed_results: DetailedResult[];
 }
+
+// Session types
+
+export interface SessionResult {
+  session_id: string;
+  source: string;
+  text: string;
+  score: number;
+}
+
+export interface SessionQueryResponse {
+  results: SessionResult[];
+  total: number;
+}
+
+// Prompt types
+
+export interface PromptResult {
+  title: string;
+  description?: string;
+  tags: string[];
+  text: string;
+  score: number;
+}
+
+export interface PromptLibrary {
+  name: string;
+  count: number;
+}
+
+export interface PromptQueryResponse {
+  results: PromptResult[];
+  total: number;
+}

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from server.api import experiments, runs
+from server.api import experiments, prompts, runs, search, sessions
 from server.db.indexes import ensure_indexes
 from server.utils.logger import get_logger
 
@@ -51,3 +51,6 @@ async def healthz():
 
 app.include_router(experiments.router, prefix="/experiments", tags=["experiments"])
 app.include_router(runs.router, prefix="/runs", tags=["runs"])
+app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
+app.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
+app.include_router(search.router, prefix="/search", tags=["search"])

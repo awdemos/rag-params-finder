@@ -292,6 +292,50 @@ def cancel(
         raise typer.Exit(1)
 
 
+@app.command("load-prompts")
+def load_prompts(
+    directory: str = typer.Argument(..., help="Directory to scan for markdown files"),
+    library_id: str = typer.Option("dotfiles", "--library-id", help="Library identifier"),
+    api_url: str = typer.Option(
+        "http://localhost:8001", "--api-url", help="RAG Params Finder API URL"
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Scan only, do not index"),
+):
+    """Index markdown files as prompt library documents."""
+    from cli.commands.load_prompts import index_documents, scan_markdown_files
+
+    logger.info(f"Scanning {directory} for markdown files...")
+    console.print(f"[cyan]Scanning {directory} for markdown files...[/cyan]")
+    docs = scan_markdown_files(directory)
+    console.print(f"[green]Found {len(docs)} markdown files[/green]")
+
+    if not docs:
+        console.print("[yellow]No markdown files found[/yellow]")
+        raise typer.Exit(0)
+
+    if dry_run:
+        for doc in docs:
+            console.print(f"  [dim]{doc['prompt_id']}[/dim]: {doc['title']}")
+        raise typer.Exit(0)
+
+    logger.info(f"Indexing {len(docs)} documents into library={library_id}...")
+    console.print(f"[cyan]Indexing {len(docs)} documents into library={library_id}...[/cyan]")
+    try:
+        result = index_documents(docs, library_id, api_url)
+        console.print(
+            Panel.fit(
+                f"[green]✓[/green] Indexed {result['documents_indexed']} documents\n"
+                f"Library: {result['library_id']}",
+                title="Prompts Indexed",
+                border_style="green",
+            )
+        )
+    except Exception as e:
+        logger.error(f"Indexing failed: {e}", exc_info=True)
+        console.print(f"[red]Failed to index prompts: {e}[/red]")
+        raise typer.Exit(1)
+
+
 @app.command()
 def version():
     """Print the installed package version."""
