@@ -1,7 +1,8 @@
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-import voyageai
-from voyageai.object import EmbeddingsObject
+if TYPE_CHECKING:
+    import voyageai
+    from voyageai.object import EmbeddingsObject
 
 from server.core.rate_limiter import RateLimiter, call_with_retry, estimate_tokens
 from server.settings import settings
@@ -9,14 +10,16 @@ from server.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_client: voyageai.Client | None = None
+_client: "voyageai.Client | None" = None
 _limiter: RateLimiter | None = None
 
 
-def get_client() -> voyageai.Client:
+def get_client() -> "voyageai.Client":
     """Get Voyage AI client singleton."""
     global _client
     if _client is None:
+        import voyageai
+
         if not settings.voyage_api_key:
             raise ValueError("VOYAGE_API_KEY not set in .env or environment")
         _client = voyageai.Client(api_key=settings.voyage_api_key)
@@ -79,7 +82,7 @@ def _embed_documents_voyage(texts: list[str], model: str) -> list[list[float]]:
         tokens = estimate_tokens(batch)
         logger.debug(f"Batch {idx + 1}/{len(batches)}: {len(batch)} texts, ~{tokens} tokens")
 
-        def _embed_batch() -> EmbeddingsObject:
+        def _embed_batch() -> "EmbeddingsObject":
             return client.embed(batch, model=model, input_type="document")
 
         result = call_with_retry(_embed_batch, limiter=get_limiter(), estimated_tokens=tokens)
