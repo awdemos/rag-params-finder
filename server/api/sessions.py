@@ -325,10 +325,10 @@ async def sessions_websocket(websocket: WebSocket):
             response = WebSocketResponse(error=str(e))
             await websocket.send_json(response.model_dump(exclude_none=True))
         except Exception:
-            pass
+            logger.debug("Failed to send WebSocket error response", exc_info=True)
     finally:
         logger.info("WebSocket connection closed")
         try:
             await websocket.close()
         except Exception:
-            pass
+            logger.debug("WebSocket close failed", exc_info=True)
