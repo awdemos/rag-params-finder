@@ -1,9 +1,9 @@
 import time
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
-from pymongo import ASCENDING, IndexModel
-from pymongo.collection import Collection
-from pymongo.operations import SearchIndexModel
+if TYPE_CHECKING:
+    from pymongo.collection import Collection
+    from pymongo.operations import SearchIndexModel
 
 from server.db.atlas import (
     CHUNKS_COLLECTION,
@@ -26,32 +26,32 @@ class _VectorIndexConfig(TypedDict):
     desc: str
 
 
-STANDARD_INDEX_SPEC: dict[str, list[IndexModel]] = {
+STANDARD_INDEX_SPEC: dict[str, list[tuple[tuple[str, int], ...]]] = {
     EXPERIMENTS_COLLECTION: [
-        IndexModel([("created_at", ASCENDING)]),
-        IndexModel([("status", ASCENDING)]),
+        [("created_at", 1)],
+        [("status", 1)],
     ],
     RUN_STATUS_COLLECTION: [
-        IndexModel([("experiment_id", ASCENDING)]),
-        IndexModel([("phase", ASCENDING)]),
+        [("experiment_id", 1)],
+        [("phase", 1)],
     ],
     CHUNKS_COLLECTION: [
-        IndexModel([("experiment_id", ASCENDING)]),
+        [("experiment_id", 1)],
     ],
     SESSION_CHUNKS_COLLECTION: [
-        IndexModel([("session_id", ASCENDING)]),
-        IndexModel([("source", ASCENDING)]),
-        IndexModel([("created_at", ASCENDING)]),
+        [("session_id", 1)],
+        [("source", 1)],
+        [("created_at", 1)],
     ],
     COLLECTIONS_COLLECTION: [
-        IndexModel([("hash", ASCENDING)]),
+        [("hash", 1)],
     ],
     QUERIES_COLLECTION: [
-        IndexModel([("experiment_id", ASCENDING)]),
+        [("experiment_id", 1)],
     ],
     RESULTS_COLLECTION: [
-        IndexModel([("experiment_id", ASCENDING)]),
-        IndexModel([("query_id", ASCENDING)]),
+        [("experiment_id", 1)],
+        [("query_id", 1)],
     ],
 }
 
@@ -61,7 +61,9 @@ VECTOR_INDEX_CONFIGS: list[_VectorIndexConfig] = [
 ]
 
 
-def _build_vector_index_model(name: str, dimensions: int) -> SearchIndexModel:
+def _build_vector_index_model(name: str, dimensions: int) -> "SearchIndexModel":
+    from pymongo.operations import SearchIndexModel
+
     return SearchIndexModel(
         definition={
             "fields": [
@@ -90,7 +92,7 @@ def _get_existing_search_indexes(collection) -> set[str]:
         return set()
 
 
-def _create_vector_indexes_on_collection(collection: Collection) -> tuple[bool, list[str]]:
+def _create_vector_indexes_on_collection(collection: "Collection") -> tuple[bool, list[str]]:
     """Create vector search indexes on a single collection. Returns (success, created_names)."""
     existing = _get_existing_search_indexes(collection)
 
@@ -188,12 +190,14 @@ def _log_manual_instructions() -> None:
     logger.info("  See: https://www.mongodb.com/docs/atlas/atlas-vector-search/create-index/")
 
 
-def _desired_keys(models: list[IndexModel]) -> set[tuple[tuple[str, int], ...]]:
+def _desired_keys(
+    spec: dict[str, list[tuple[tuple[str, int], ...]]]
+) -> set[tuple[tuple[str, int], ...]]:
     """Extract the key tuples we want so we can compare with what exists."""
-    return {tuple(m.document["key"].items()) for m in models}
+    return {tuple(key) for keys in spec.values() for key in keys}
 
 
-def _existing_keys(collection: Collection) -> set[tuple[tuple[str, int], ...]]:
+def _existing_keys(collection: "Collection") -> set[tuple[tuple[str, int], ...]]:
     """Return key tuples of indexes already on the collection (excluding _id)."""
     return {
         tuple(info["key"])
@@ -204,15 +208,17 @@ def _existing_keys(collection: Collection) -> set[tuple[tuple[str, int], ...]]:
 
 def _ensure_standard_indexes() -> None:
     """Create standard indexes only for collections that are missing them."""
+    from pymongo import IndexModel
+
     created = 0
-    for name, models in STANDARD_INDEX_SPEC.items():
+    for name, keys in STANDARD_INDEX_SPEC.items():
         collection = get_collection(name)
         existing = _existing_keys(collection)
-        desired = _desired_keys(models)
+        desired = {tuple(key) for key in keys}
         missing = desired - existing
         if not missing:
             continue
-        needed = [m for m in models if tuple(m.document["key"].items()) in missing]
+        needed = [IndexModel(list(key)) for key in missing]
         collection.create_indexes(needed)
         created += len(needed)
         logger.info(f"Created {len(needed)} index(es) on {name}")

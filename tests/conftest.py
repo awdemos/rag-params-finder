@@ -53,7 +53,7 @@ def client(
     mock_embed_query: MagicMock,
 ) -> Generator[TestClient, None, None]:
     """Create a FastAPI TestClient with all external dependencies mocked."""
-    with patch("server.main.ensure_indexes"):
+    with patch("server.db.indexes.ensure_indexes"):
         with patch("server.api.sessions.get_collection", return_value=mock_collection):
             with patch("server.api.prompts.get_collection", return_value=mock_collection):
                 from server.main import app

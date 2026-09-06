@@ -50,6 +50,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["cli*", "server*"]
+where = ["."]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
@@ -57,7 +61,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
-ignore = []
+ignore = ["UP047"]
 
 [tool.mypy]
 python_version = "3.12"

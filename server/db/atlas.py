@@ -1,19 +1,25 @@
+from typing import TYPE_CHECKING
+
 import certifi
-from pymongo import MongoClient
-from pymongo.database import Database
+
+if TYPE_CHECKING:
+    from pymongo import MongoClient
+    from pymongo.database import Database
 
 from server.settings import settings
 from server.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_client: MongoClient | None = None
-_db: Database | None = None
+_client: "MongoClient | None" = None
+_db: "Database | None" = None
 
 
-def get_mongo_client() -> MongoClient:
+def get_mongo_client() -> "MongoClient":
     global _client
     if _client is None:
+        from pymongo import MongoClient
+
         if not settings.mongodb_uri:
             raise ValueError("MONGODB_URI not set in .env or environment")
         uri = settings.mongodb_uri.lower()
@@ -26,7 +32,7 @@ def get_mongo_client() -> MongoClient:
     return _client
 
 
-def get_database() -> Database:
+def get_database() -> "Database":
     global _db
     if _db is None:
         client = get_mongo_client()

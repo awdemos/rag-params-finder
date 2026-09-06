@@ -5,7 +5,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.api import experiments, prompts, runs, search, sessions
-from server.db.indexes import ensure_indexes
 from server.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -16,6 +15,8 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Ensure indexes exist on startup."""
+    from server.db.indexes import ensure_indexes
+
     logger.info("Server starting...")
     try:
         ensure_indexes()
